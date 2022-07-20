@@ -1,0 +1,335 @@
+---
+title: "Análise COVID-19 Belém"
+author: "Thiago Fernandes"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, echo=FALSE}
+library(pacman)
+p_load(tidyverse, rio, janitor, RColorBrewer, knitr, 
+       rmarkdown, ggrepel, plotly, forecast, ggridges, reshape2)
+```
+
+# Carregando o banco de dados
+
+
+```{r, echo=FALSE}
+banco_1 <- read.csv2("casos_positivos-20220720092322033479.csv", 
+                     encoding = "utf-8", sep = ",")
+
+banco_1 <- banco_1 |> 
+  clean_names() |> 
+  as_tibble()
+
+
+
+monitoramento <- banco_1 |> 
+  dplyr::filter(municipio_residencia == "Belém") |> 
+  dplyr::mutate(datanot = as.Date(data_notificacao, format = "%d/%m/%Y"),
+         dataobt = as.Date(data_obito, format = "%d/%m/%Y"),
+         data_IS = as.Date(data_inicio_sintomas, format = "%d/%m/%Y"),
+         CPF = as.character(cpf),  # Deixa o CPF como character mesmo, confia 
+         nome = str_to_upper(nome),
+         id = as.character(id),
+         Faixa_Etaria = case_when(idade <= 10~"0 a 10 anos",
+                                  idade <= 20~"11 a 20 anos",
+                                  idade <= 30~"21 a 30 anos",
+                                  idade <= 40~"31 a 40 anos",
+                                  idade <= 50~"41 a 50 anos",
+                                  idade <= 60~"51 a 60 anos",
+                                  idade <= 70~"61 a 70 anos",
+                                  idade <= 80~"71 a 80 anos",
+                                  idade <= 90~"81 a 90 anos",
+                                  idade >  90~"Acima de 90 anos"),
+         month = format(datanot, "%m"),
+         year = format(datanot, "%Y"),
+         Mes = recode(month, "01" = "Janeiro", 
+                      "02" = "Fevereiro",
+                      "03" = "Março", 
+                      "04" = "Abril", 
+                      "05" = "Maio", 
+                      "06" = "Junho",
+                      "07" = "Julho", 
+                      "08" = "Agosto",
+                      "09" = "Setembro", 
+                      "10" = "Outubro",
+                      "11" = "Novembro", 
+                      "12" = "Dezembro"),
+         Mes = factor(Mes, levels = c("Janeiro", "Fevereiro", "Março", "Abril",
+                                      "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro")))
+
+
+
+
+
+
+
+dados <- monitoramento |>
+  filter(municipio_residencia == "Belém",
+         datanot >= "2022-01-01") |> 
+  group_by(datanot) |> 
+  summarise(count = n()) |> 
+  mutate(acumulado = cumsum(count))
+
+paged_table(monitoramento)
+
+```
+
+# Casos de COVID-19 {.tabset}
+
+## Número de casos de COVID-19 em Belém
+```{r, echo=FALSE, fig.align='center', message=FALSE, out.width="100%"}
+
+dados_1_xts <- dados |> 
+  filter(datanot >= "2022-01-01") |> 
+  mutate(log_casos = log(count)) |> 
+  select(datanot, count, log_casos)
+
+
+fit.xts <- auto.arima(ts(dados_1_xts$log_casos, frequency = 365))
+forecast_length <- 30
+
+fore.xts <- forecast(fit.xts, h  = forecast_length)
+
+fore.dates <- seq(as.POSIXct(dados_1_xts$datanot[length(dados_1_xts$datanot)], 
+                             origin='2022-01-01'), 
+                  by=dados_1_xts$datanot[length(dados_1_xts$datanot)] - dados_1_xts$datanot[length(dados_1_xts$datanot)-1], 
+                  len=forecast_length)
+
+
+plot_ly() |> 
+  add_lines(x = dados_1_xts$datanot, y = dados_1_xts$log_casos, 
+            color = I("black"),
+            name = "observed",
+            marker = list(mode = "lines")) |> 
+  add_lines(x = fore.dates, y = fore.xts$mean, color = I("blue"), 
+            name = "prediction") %>%
+  add_ribbons(x = fore.dates, 
+              ymin = fore.xts$lower[, 2], 
+              ymax = fore.xts$upper[, 2],
+              color = I("gray95"), 
+              name = "95% confidence") %>%
+  add_ribbons(x = fore.dates, 
+              ymin = fore.xts$lower[, 1], 
+              ymax = fore.xts$upper[, 1],
+              color = I("gray80"), name = "80% confidence")
+```
+
+
+
+## Casos de COVID-19 escala normal
+```{r, echo=FALSE,message=FALSE, fig.align='center'}
+
+monitoramento |>
+  filter(datanot >= "2022-01-01") |> 
+  group_by(datanot) |> 
+  summarise(count = n()) |> 
+  ggplot(aes(x = datanot, y = count)) +
+  geom_line() +
+  geom_point() +
+  geom_smooth(method = "loess", color = "red") +
+  labs(x = "Data de Notificação", y = "Número de casos",
+       title = "Casos de COVID-19 em Belém-PA, 2022.") +
+  scale_x_date(date_breaks = "1 month", date_labels = "%B/%y") +
+  theme_bw()
+
+```
+
+## Casos Acumulados
+
+No ano de 2022 até a data atual, `r max(dados$datanot)`, foram registrados `r sum(dados$count)` casos de COVID-19 em Belém-PA. 
+
+
+```{r, echo=FALSE,message=FALSE, fig.align='center'}
+
+
+dados_1_xts <- dados |> 
+  filter(datanot >= "2022-01-01") |> 
+  select(datanot, acumulado)
+
+
+fit.xts <- auto.arima(ts(dados_1_xts$acumulado, frequency = 365))
+forecast_length <- 30
+
+fore.xts <- forecast(fit.xts, h  = forecast_length)
+
+fore.dates <- seq(as.POSIXct(dados_1_xts$datanot[length(dados_1_xts$datanot)], 
+                             origin='2022-01-01'), 
+                  by=dados_1_xts$datanot[length(dados_1_xts$datanot)] - dados_1_xts$datanot[length(dados_1_xts$datanot)-1], 
+                  len=forecast_length)
+
+
+plot_ly() |> 
+  add_lines(x = dados_1_xts$datanot, y = dados_1_xts$acumulado, 
+            color = I("black"),
+            name = "observed",
+            marker = list(mode = "lines")) |> 
+  add_lines(x = fore.dates, y = fore.xts$mean, color = I("blue"), 
+            name = "prediction") %>%
+  add_ribbons(x = fore.dates, 
+              ymin = fore.xts$lower[, 2], 
+              ymax = fore.xts$upper[, 2],
+              color = I("gray95"), 
+              name = "95% confidence") %>%
+  add_ribbons(x = fore.dates, 
+              ymin = fore.xts$lower[, 1], 
+              ymax = fore.xts$upper[, 1],
+              color = I("gray80"), name = "80% confidence")
+```
+
+<span style="color:red">A previsão para os próximos 30 dias é de
+`r max(fore.xts$mean) - min(fore.xts$mean)` casos de COVID-19 em Belém-PA</span>
+
+
+
+# Casos Gerais {.tabset}
+
+
+## Casos por mês em 2022
+
+```{r, echo = FALSE, message = FALSE, fig.align = 'center'}
+
+monitoramento |> 
+  filter(datanot >= "2022-01-01") |> 
+  group_by(Mes) |> 
+  summarise(count = n()) |> 
+  ggplot(aes(x = Mes, y = count, fill = Mes)) +
+  geom_col(color = "Black") +
+  scale_fill_brewer(palette = "Set3") +
+  geom_point() +
+  labs(x = "Mês", y = "Número de casos") +
+  geom_text(aes(label = count), vjust = -.5) +
+  theme_bw() +
+  theme(legend.position = "none")
+
+
+
+
+
+```
+
+
+
+## Casos por bairro
+```{r, echo = FALSE, message=FALSE, fig.align='center'}
+
+monitoramento |> 
+  mutate(bairro = ifelse(bairro %in% "", NA, bairro)) |> 
+  group_by(bairro) |> 
+  summarise(count = n()) |> 
+  drop_na(bairro) |> 
+  top_n(10) |> 
+  ggplot(aes(x = count, y = reorder(bairro, count), fill = bairro)) +
+  geom_col(color = "black") +
+  labs(x = "Número de casos", y = "Bairro") +
+  scale_x_continuous(limits = c(0,10000)) +
+  scale_fill_brewer(palette = "Set3") +
+  geom_text(aes(label = count), hjust = -.5) +
+  theme_bw() +
+  theme(legend.position = "none")
+
+```
+
+
+
+## Média de idade dos pacientes
+
+
+```{r, echo=FALSE, warning=FALSE, fig.align='center', message=FALSE}
+
+monitoramento |> 
+  filter(datanot >= "2022-01-01") |> 
+  group_by(datanot, Mes, obito) |> 
+  summarise(count = mean(idade)) |> 
+  ggplot(aes(x = Mes, y = count, fill = obito)) +
+  geom_boxplot() +
+  labs(x = "Mês", y = "Média de idade dos pacientes",
+       fill = "Óbito") +
+  scale_fill_brewer(palette = "Set2") +
+  scale_y_continuous(breaks = seq(0,100,5)) +
+  theme_bw() 
+
+```
+
+# Comorbidades {.tabset}
+
+# Principais comorbidades
+
+
+```{r, echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
+
+comorb <- monitoramento |> 
+  filter(datanot >= "2022-01-01") |> 
+  select(datanot, Mes, obito, cardiopatia, doenca_hematologica, doenca_hepatica,
+         asma, diabetes, doenca_neurologica, pneumopatia, imunodeficiencia_imunisupressao, doenca_renal, obesidade) |> 
+  pivot_longer(c(4:13), names_to = "Comorbidade", values_to = "Res")
+
+
+comorb |>
+  filter(Res == "Sim") |> 
+  group_by(Res, obito, Comorbidade) |> 
+  summarise(count = n()) |> 
+  ggplot(aes(x = reorder(Comorbidade, count), y = count, 
+             fill = factor(obito, levels = c("Sim", "Não")))) +
+  geom_bar(color = "black",
+           position = "dodge", stat = "identity") +
+  geom_text(position = position_dodge(), inherit.aes = TRUE,
+            aes(x = Comorbidade, y = count, label = count, group = Comorbidade),
+            hjust = -.5, vjust = .5) +
+  labs(fill = "Óbito") +
+  scale_y_continuous(limits = c(0,800)) +
+  scale_fill_brewer(palette = "Set3") +
+  theme_bw() +
+  coord_flip()
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Óbitos por COVID-19
+
+```{r, echo=FALSE, fig.align='center', message=FALSE}
+monitoramento |>
+  filter(dataobt >= "2022-01-01",
+         obito == "Sim") |> 
+  group_by(dataobt) |> 
+  summarise(count = n()) |> 
+  ggplot(aes(x = dataobt, y = count)) +
+  geom_line() +
+  geom_point() +
+  geom_smooth(method = "loess", color = "red") +
+  labs(x = "Data de Notificação", y = "Número de casos",
+       title = "Casos de COVID-19 em Belém-PA, 2022.") +
+  scale_y_continuous(limits = c(-3,10), breaks = -3:10) +
+  geom_hline(yintercept = 0) +
+  scale_x_date(date_breaks = "15 day", date_labels = "%d/%b") +
+  theme_bw()
+```
+
+
+
+
