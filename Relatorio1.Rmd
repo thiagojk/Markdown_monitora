@@ -447,8 +447,11 @@ df <- full_join(df1, datas, by = "date") |>
 
 ## Tabela R(t)
 
+
 ```{r, echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
 
+# Tabela 1
+# Tabela 2
 tabela_rt <- df2 |> 
   dplyr::select(date, rt) |> 
   dplyr::filter(date >= Sys.Date() - 30)
@@ -458,7 +461,7 @@ paged_table(tabela_rt)
 ```
 
 
-
+  
 
 
 
