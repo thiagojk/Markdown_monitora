@@ -1,6 +1,6 @@
 ---
-title: "Análise COVID-19 Belém"
-author: "Thiago Fernandes"
+title: "COVID-19 Belém"
+author: "SESMA"
 date: "`r Sys.Date()`"
 output:
   html_document:
@@ -15,6 +15,9 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+
+
+
 
 
 ```{r, echo=FALSE}
@@ -450,8 +453,6 @@ df <- full_join(df1, datas, by = "date") |>
 
 ```{r, echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
 
-# Tabela 1
-# Tabela 2
 tabela_rt <- df2 |> 
   dplyr::select(date, rt) |> 
   dplyr::filter(date >= Sys.Date() - 30)
