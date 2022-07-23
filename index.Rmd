@@ -162,7 +162,9 @@ valueBox(76176, icon="fa-thumbs-down", color = "blue"))
 ```
 
 
-### R(t)
+
+
+### Taxa de propagação R(t)
 ```{r}
 df2 |> 
     dplyr::filter(date == max(date)) |> 
