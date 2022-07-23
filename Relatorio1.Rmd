@@ -30,7 +30,7 @@ p_load(tidyverse, rio, janitor, RColorBrewer, knitr,
 
 
 ```{r, echo=FALSE}
-banco_1 <- read.csv2("casos_positivos-20220721085508877479.csv", 
+banco_1 <- read.csv2("casos_positivos-20220720092322033479.csv", 
                      encoding = "UTF-8", sep = ",")
 
 banco_1 <- banco_1 |> 
@@ -82,18 +82,23 @@ monitoramento <- banco_1 |>
 
 dados <- monitoramento |>
   filter(municipio_residencia == "Belém",
-         datanot >= "2022-01-01") |> 
+         datanot >= "2022-01-01") |>  
   group_by(datanot) |> 
   summarise(count = n()) |> 
   mutate(acumulado = cumsum(count))
 
 
-monitora_dados <- monitoramento |> 
-  dplyr::select(-cpf, -cns)
+```
 
-paged_table(monitora_dados)
+```{css, echo = FALSE}
+.columns {display: flex;}
+
+h1 {color: red;}
+h2 {color: green;}
 
 ```
+
+
 
 # Casos de COVID-19 {.tabset}
 

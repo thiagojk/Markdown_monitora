@@ -1,0 +1,135 @@
+---
+title: "Untitled"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(pacman)
+p_load(tidyverse, rio, janitor, RColorBrewer, knitr, 
+       rmarkdown, ggrepel, plotly, forecast, ggridges, reshape2, R0)
+```
+
+```{r}
+banco_1 <- read.csv2("casos_positivos-20220720092322033479.csv", 
+                     encoding = "UTF-8", sep = ",")
+
+banco_1 <- banco_1 |> 
+  janitor::clean_names() |> 
+  as_tibble()
+
+
+
+monitoramento <- banco_1 |> 
+  dplyr::filter(municipio_residencia == "Belém") |> 
+  dplyr::mutate(datanot = as.Date(data_notificacao, format = "%d/%m/%Y"),
+         dataobt = as.Date(data_obito, format = "%d/%m/%Y"),
+         data_IS = as.Date(data_inicio_sintomas, format = "%d/%m/%Y"),
+         CPF = as.character(cpf),  # Deixa o CPF como character mesmo, confia 
+         nome = str_to_upper(nome),
+         id = as.character(id),
+         Faixa_Etaria = case_when(idade <= 10~"0 a 10 anos",
+                                  idade <= 20~"11 a 20 anos",
+                                  idade <= 30~"21 a 30 anos",
+                                  idade <= 40~"31 a 40 anos",
+                                  idade <= 50~"41 a 50 anos",
+                                  idade <= 60~"51 a 60 anos",
+                                  idade <= 70~"61 a 70 anos",
+                                  idade <= 80~"71 a 80 anos",
+                                  idade <= 90~"81 a 90 anos",
+                                  idade >  90~"Acima de 90 anos"),
+         month = format(datanot, "%m"),
+         year = format(datanot, "%Y"),
+         Mes = recode(month, "01" = "Janeiro", 
+                      "02" = "Fevereiro",
+                      "03" = "Março", 
+                      "04" = "Abril", 
+                      "05" = "Maio", 
+                      "06" = "Junho",
+                      "07" = "Julho", 
+                      "08" = "Agosto",
+                      "09" = "Setembro", 
+                      "10" = "Outubro",
+                      "11" = "Novembro", 
+                      "12" = "Dezembro"),
+         Mes = factor(Mes, levels = c("Janeiro", "Fevereiro", "Março", "Abril",
+                                      "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro")))
+
+
+
+
+
+
+
+dados <- monitoramento |>
+  filter(municipio_residencia == "Belém",
+         datanot >= "2022-01-01") |>  
+  group_by(datanot) |> 
+  summarise(count = n()) |> 
+  mutate(acumulado = cumsum(count))
+
+```
+
+
+
+Column {data-width=650, .sidebar}
+
+
+-----------------------------------------------------------------------
+
+### Chart A
+
+```{r}
+
+dados_1_xts <- dados |> 
+  dplyr::filter(datanot >= "2022-01-01") |> 
+  dplyr::mutate(log_casos = log(count)) |> 
+  dplyr::select(datanot, count, log_casos)
+
+
+fit.xts <- auto.arima(ts(dados_1_xts$log_casos, frequency = 365))
+forecast_length <- 30
+
+fore.xts <- forecast(fit.xts, h  = forecast_length)
+
+fore.dates <- seq(as.POSIXct(dados_1_xts$datanot[length(dados_1_xts$datanot)], 
+                             origin='2022-01-01'), 
+                  by=dados_1_xts$datanot[length(dados_1_xts$datanot)] - dados_1_xts$datanot[length(dados_1_xts$datanot)-1], 
+                  len=forecast_length)
+
+
+plot_ly() |> 
+  add_lines(x = dados_1_xts$datanot, y = dados_1_xts$log_casos, 
+            color = I("black"),
+            name = "observed",
+            marker = list(mode = "lines")) |> 
+  add_lines(x = fore.dates, y = fore.xts$mean, color = I("blue"), 
+            name = "prediction") %>%
+  add_ribbons(x = fore.dates, 
+              ymin = fore.xts$lower[, 2], 
+              ymax = fore.xts$upper[, 2],
+              color = I("gray95"), 
+              name = "95% confidence") %>%
+  add_ribbons(x = fore.dates, 
+              ymin = fore.xts$lower[, 1], 
+              ymax = fore.xts$upper[, 1],
+              color = I("gray80"), name = "80% confidence")
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Chart B
+
+```{r}
+
+```
+
+### Chart C
+
+```{r}
+
+```
+
