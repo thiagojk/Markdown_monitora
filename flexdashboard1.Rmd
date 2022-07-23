@@ -1,15 +1,17 @@
 ---
-title: "Untitled"
+title: "COVID-19 Belém-PA"
 output: 
   flexdashboard::flex_dashboard:
     orientation: rows
     vertical_layout: fill
+    runtime: shiny
 ---
 
 ```{r setup, include=FALSE}
 library(pacman)
 p_load(tidyverse, rio, janitor, RColorBrewer, knitr, 
-       rmarkdown, ggrepel, plotly, forecast, ggridges, reshape2, R0)
+       rmarkdown, ggrepel, plotly, forecast, ggridges, reshape2, 
+       R0, shiny)
 ```
 
 ```{r}
@@ -74,12 +76,19 @@ dados <- monitoramento |>
 
 
 
-Column {data-width=650, .sidebar}
+## Sidebar {.sidebar}
+===
+```{r}
+selectInput("bairro", label = "Bairro", choices = c("Pedreira", "Marco", "Bengui", ""))
+```
 
 
------------------------------------------------------------------------
+Pagina 1
+===
 
-### Chart A
+## Column 1
+
+### Previsão de casos 
 
 ```{r}
 
@@ -118,18 +127,264 @@ plot_ly() |>
               color = I("gray80"), name = "80% confidence")
 ```
 
-Column {data-width=350}
------------------------------------------------------------------------
 
-### Chart B
+## Column
 
-```{r}
+### Escala normal
+
+```{r, echo=FALSE,message=FALSE, fig.align='center'}
+
+monitoramento |>
+  filter(datanot >= "2022-01-01") |> 
+  group_by(datanot) |> 
+  summarise(count = n()) |> 
+  ggplot(aes(x = datanot, y = count)) +
+  geom_line() +
+  geom_point() +
+  geom_smooth(method = "loess", color = "red") +
+  labs(x = "Data de Notificação", y = "Número de casos",
+       title = "Casos de COVID-19 em Belém-PA, 2022.") +
+  scale_x_date(date_breaks = "1 month", date_labels = "%B/%y") +
+  theme_bw()
 
 ```
 
-### Chart C
+### Casos acumulados
 
-```{r}
+
+No ano de 2022 até a data atual, `r max(dados$datanot)`, foram registrados `r sum(dados$count)` casos de COVID-19 em Belém-PA. 
+
+
+```{r, echo=FALSE,message=FALSE, fig.align='center'}
+
+
+dados_1_xts <- dados |> 
+  dplyr::filter(datanot >= "2022-01-01") |> 
+  dplyr::select(datanot, acumulado)
+
+
+fit.xts <- auto.arima(ts(dados_1_xts$acumulado, frequency = 365))
+forecast_length <- 30
+
+fore.xts <- forecast(fit.xts, h  = forecast_length)
+
+fore.dates <- seq(as.POSIXct(dados_1_xts$datanot[length(dados_1_xts$datanot)], 
+                             origin='2022-01-01'), 
+                  by=dados_1_xts$datanot[length(dados_1_xts$datanot)] - dados_1_xts$datanot[length(dados_1_xts$datanot)-1], 
+                  len=forecast_length)
+
+
+plot_ly() |> 
+  add_lines(x = dados_1_xts$datanot, y = dados_1_xts$acumulado, 
+            color = I("black"),
+            name = "observed",
+            marker = list(mode = "lines")) |> 
+  add_lines(x = fore.dates, y = fore.xts$mean, color = I("blue"), 
+            name = "prediction") %>%
+  add_ribbons(x = fore.dates, 
+              ymin = fore.xts$lower[, 2], 
+              ymax = fore.xts$upper[, 2],
+              color = I("gray95"), 
+              name = "95% confidence") %>%
+  add_ribbons(x = fore.dates, 
+              ymin = fore.xts$lower[, 1], 
+              ymax = fore.xts$upper[, 1],
+              color = I("gray80"), name = "80% confidence")
+```
+
+
+<span style="color:red">A previsão para os próximos 30 dias é de
+`r max(fore.xts$mean) - min(fore.xts$mean)` casos de COVID-19 em Belém-PA</span>
+
+
+Pagina 2
+===
+
+## Column 2
+
+
+### Casos por mês em 2022
+
+```{r, echo = FALSE, message = FALSE, fig.align = 'center'}
+
+monitoramento |> 
+  filter(datanot >= "2022-01-01") |> 
+  group_by(Mes) |> 
+  summarise(count = n()) |> 
+  ggplot(aes(x = Mes, y = count, fill = Mes)) +
+  geom_col(color = "Black") +
+  scale_fill_brewer(palette = "Set3") +
+  geom_point() +
+  labs(x = "Mês", y = "Número de casos") +
+  geom_text(aes(label = count), vjust = -.5) +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+
+
+### Casos por bairro
+```{r, echo = FALSE, message=FALSE, fig.align='center'}
+
+monitoramento |> 
+  mutate(bairro = ifelse(bairro %in% "", NA, bairro)) |> 
+  group_by(bairro) |> 
+  summarise(count = n()) |> 
+  drop_na(bairro) |> 
+  top_n(10) |> 
+  ggplot(aes(x = count, y = reorder(bairro, count), fill = bairro)) +
+  geom_col(color = "black") +
+  labs(x = "Número de casos", y = "Bairro") +
+  scale_x_continuous(limits = c(0,10000)) +
+  scale_fill_brewer(palette = "Set3") +
+  geom_text(aes(label = count), hjust = -.5) +
+  theme_bw() +
+  theme(legend.position = "none")
 
 ```
+
+## Column
+
+### Média de idade dos pacientes
+
+
+```{r, echo=FALSE, warning=FALSE, fig.align='center', message=FALSE}
+
+monitoramento |> 
+  filter(datanot >= "2022-01-01") |> 
+  group_by(datanot, Mes, obito) |> 
+  summarise(count = mean(idade)) |> 
+  ggplot(aes(x = Mes, y = count, fill = obito)) +
+  geom_boxplot() +
+  labs(x = "Mês", y = "Média de idade dos pacientes",
+       fill = "Óbito") +
+  scale_fill_brewer(palette = "Set2") +
+  scale_y_continuous(breaks = seq(0,100,5)) +
+  theme_bw() 
+
+```
+
+
+### Óbitos dos últimos 30 dias
+```{r, echo=FALSE, fig.align='center', message=FALSE}
+monitoramento |>
+  filter(dataobt >= Sys.Date() - 30,
+         obito == "Sim") |> 
+  group_by(dataobt) |> 
+  summarise(count = n()) |> 
+  ggplot(aes(x = dataobt, y = count)) +
+  geom_point() +
+  geom_line() +
+  geom_text(aes(label = count), vjust = -.5) +
+  labs(x = "Data do óbito", y = "Quantidade") +
+  scale_y_continuous(breaks = seq(0,5,1)) +
+  scale_x_date(date_breaks = "3 days", date_labels = "%d/%B") +
+  theme_bw()
+```
+
+Pagina 3
+===
+
+A estimativa R(t) é uma medida chave do quão rápido o vírus está se espalhando numa determinada população. 
+Corresponde ao número médio de pessoas infectadas por pessoa infecciosa. Se o R(t) estiver acima de 1.0 indica que o vírus está se espalhando rapidamente na população e quando o R(t) está abaixo de 1.0, indica que o vírus está sob controle. 
+
+Por exemplo, uma taxa de propagação de 1,54 indica que a cada 100 pessoas infectadas com o vírus conseguem transmitir a doença para outras 154 pessoas saudáveis.
+
+Uma recomendação é de que medidas de isolamento e distanciamento sejam flexibilizadas apenas se a taxa de propagação R(t) estiver abaixo de 1 por pelo menos uma semana.
+
+Vale destacar que somente a análise do R(t) não caracteriza um determinado território em relação à gravidade, deve-se levar em consideação o R(t) e o número absoluto de casos. 
+
+## Rt {.tabset}
+
+### R(t)
+```{r, echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
+
+df1 <- monitoramento |> 
+  dplyr::filter(datanot >= "2022-01-01") |> 
+            dplyr::select(datanot) |> 
+            dplyr::group_by(datanot) |> 
+            summarise(count = n()) |>  
+            rename(date = datanot,
+                   confirmed = count)
+
+# ------------Preencher datas
+
+datas <- data.frame(date = seq.POSIXt(as.POSIXct("2022-01-01"), as.POSIXct(max(df1$date)), 
+                    by = "days")) 
+
+df <- full_join(df1, datas, by = "date") |> 
+  mutate(confirmed = ifelse(is.na(confirmed), 0, confirmed),
+         date = as.Date(date, format = "%d/%m/%Y"),
+         log_casos = log(confirmed)) |> 
+  arrange(date)
+  
+
+
+
+# ---------------------------
+        
+        
+        gt <-generation.time("weibull", c(3.4, 2))
+        
+        curva <- abs(df$confirmed)
+
+        rt = est.R0.TD(epi = curva,
+                  gt,
+                  begin=1,
+                  end=(as.numeric(length(curva))-1),
+                  correct=T,
+                  nsim=1000)
+
+
+        
+        names(curva)=df1$date
+        
+        df2=as.data.frame(cbind(rt$R,rt$conf.int))
+        df2$date=seq.Date(from=as.Date(rt$begin,
+                                       origin = "2022-01-01"),
+                          length.out = rt$end.nb,by="days",)
+        names(df2)=c("rt","lower","upper","date")
+        
+        hline <-  function(y = 0, color = "black") {
+            list(
+                type = "line", 
+                x0 = 0, 
+                x1 = 1, 
+                xref = "paper",
+                y0 = y, 
+                y1 = y, 
+                line = list(color = color)
+            )
+        }
+        
+        
+
+            plot_ly(df2,x=~date) %>%
+                add_lines(y=~rt,color=I("red")) %>%
+                add_ribbons(ymin=~lower,ymax=~upper,color=I("grey"),
+                            opacity=50) %>%
+                layout(shapes = list(hline(1))) %>%
+                layout(title="Taxa de Transmissão de COVID-19 em Belém-PA",xaxis=list(title="Date"),
+                       yaxis=list(title="R(t)"),
+                       showlegend = FALSE)
+
+
+
+
+```
+
+### Tabela R(t)
+
+
+```{r, echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
+
+tabela_rt <- df2 |> 
+  dplyr::select(date, rt) |> 
+  dplyr::filter(date >= Sys.Date() - 15)
+
+
+paged_table(tabela_rt)
+```
+
+
 
