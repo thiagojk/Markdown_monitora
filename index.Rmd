@@ -135,6 +135,7 @@ plot_ly() |>
 
 ```{r, echo=FALSE,message=FALSE, fig.align='center'}
 
+ggplotly(
 monitoramento |>
   filter(datanot >= "2022-01-01") |> 
   group_by(datanot) |> 
@@ -146,7 +147,7 @@ monitoramento |>
   labs(x = "Data de Notificação", y = "Número de casos",
        title = "Casos de COVID-19 em Belém-PA, 2022.") +
   scale_x_date(date_breaks = "1 month", date_labels = "%B/%y") +
-  theme_bw()
+  theme_bw())
 
 ```
 
