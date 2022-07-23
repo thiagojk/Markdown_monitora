@@ -4,13 +4,17 @@ output:
   flexdashboard::flex_dashboard:
     orientation: rows
     vertical_layout: fill
+    runtime: shiny
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, context = "server"}
+
 library(pacman)
 p_load(tidyverse, rio, janitor, RColorBrewer, knitr, 
-       rmarkdown, ggrepel, plotly, forecast, ggridges, reshape2, 
-       R0, shiny)
+       rmarkdown, ggrepel, plotly, forecast, ggridges, 
+       reshape2, R0, shiny, flexdashboard)
+
+
 ```
 
 
@@ -73,6 +77,56 @@ dados <- monitoramento |>
   summarise(count = n()) |> 
   mutate(acumulado = cumsum(count))
 
+
+###
+
+
+df1 <- monitoramento |> 
+  dplyr::filter(datanot >= "2022-01-01") |> 
+            dplyr::select(datanot) |> 
+            dplyr::group_by(datanot) |> 
+            summarise(count = n()) |>  
+            rename(date = datanot,
+                   confirmed = count)
+
+# ------------Preencher datas
+
+datas <- data.frame(date = seq.POSIXt(as.POSIXct("2022-01-01"), as.POSIXct(max(df1$date)), 
+                    by = "days")) 
+
+df <- full_join(df1, datas, by = "date") |> 
+  mutate(confirmed = ifelse(is.na(confirmed), 0, confirmed),
+         date = as.Date(date, format = "%d/%m/%Y"),
+         log_casos = log(confirmed)) |> 
+  arrange(date)
+  
+
+
+
+# ---------------------------
+        
+        
+        gt <-generation.time("weibull", c(3.4, 2))
+        
+        curva <- abs(df$confirmed)
+
+        rt = est.R0.TD(epi = curva,
+                  gt,
+                  begin=1,
+                  end=(as.numeric(length(curva))-1),
+                  correct=T,
+                  nsim=1000)
+
+
+        
+        names(curva)=df1$date
+        
+        df2=as.data.frame(cbind(rt$R,rt$conf.int))
+        df2$date=seq.Date(from=as.Date(rt$begin,
+                                       origin = "2022-01-01"),
+                          length.out = rt$end.nb,by="days",)
+        names(df2)=c("rt","lower","upper","date")
+
 ```
 
 
@@ -86,6 +140,41 @@ selectInput("bairro", label = "Bairro", choices = c("Pedreira", "Marco", "Bengui
 
 Pagina 1
 ===
+
+## Column
+
+### Casos COVID-19 {.value-box}
+```{r}
+
+renderValueBox(
+  monitoramento |> 
+    group_by(datanot) |> 
+    summarise(count = n()) |>
+    summarise(soma = sum(count)) |> 
+    valueBox(icon="virus-covid", color = "warning"))
+```
+
+### Casos {.value-box}
+```{r}
+
+renderValueBox(
+valueBox(76176, icon="fa-thumbs-down", color = "blue"))
+```
+
+
+### R(t)
+```{r}
+df2 |> 
+    dplyr::filter(date == max(date)) |> 
+    summarise(rt = rt) |> 
+    as.numeric() |>
+    round(digits = 2) |> 
+      gauge(min = 0, max = 1, gaugeSectors(
+  success = c(0, 0.05), warning = c(0.051, 0.07), danger = c(0.071, 1),colors = "warning"))
+```
+
+
+
 
 ## Column 1
 
@@ -301,51 +390,6 @@ Vale destacar que somente a análise do R(t) não caracteriza um determinado ter
 ### R(t)
 ```{r, echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
 
-df1 <- monitoramento |> 
-  dplyr::filter(datanot >= "2022-01-01") |> 
-            dplyr::select(datanot) |> 
-            dplyr::group_by(datanot) |> 
-            summarise(count = n()) |>  
-            rename(date = datanot,
-                   confirmed = count)
-
-# ------------Preencher datas
-
-datas <- data.frame(date = seq.POSIXt(as.POSIXct("2022-01-01"), as.POSIXct(max(df1$date)), 
-                    by = "days")) 
-
-df <- full_join(df1, datas, by = "date") |> 
-  mutate(confirmed = ifelse(is.na(confirmed), 0, confirmed),
-         date = as.Date(date, format = "%d/%m/%Y"),
-         log_casos = log(confirmed)) |> 
-  arrange(date)
-  
-
-
-
-# ---------------------------
-        
-        
-        gt <-generation.time("weibull", c(3.4, 2))
-        
-        curva <- abs(df$confirmed)
-
-        rt = est.R0.TD(epi = curva,
-                  gt,
-                  begin=1,
-                  end=(as.numeric(length(curva))-1),
-                  correct=T,
-                  nsim=1000)
-
-
-        
-        names(curva)=df1$date
-        
-        df2=as.data.frame(cbind(rt$R,rt$conf.int))
-        df2$date=seq.Date(from=as.Date(rt$begin,
-                                       origin = "2022-01-01"),
-                          length.out = rt$end.nb,by="days",)
-        names(df2)=c("rt","lower","upper","date")
         
         hline <-  function(y = 0, color = "black") {
             list(
