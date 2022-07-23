@@ -4,7 +4,6 @@ output:
   flexdashboard::flex_dashboard:
     orientation: rows
     vertical_layout: fill
-    runtime: shiny
 ---
 
 ```{r setup, include=FALSE}
@@ -296,7 +295,7 @@ Uma recomendação é de que medidas de isolamento e distanciamento sejam flexib
 
 Vale destacar que somente a análise do R(t) não caracteriza um determinado território em relação à gravidade, deve-se levar em consideação o R(t) e o número absoluto de casos. 
 
-## Rt {.tabset}
+## Rt
 
 ### R(t)
 ```{r, echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
@@ -373,19 +372,6 @@ df <- full_join(df1, datas, by = "date") |>
 
 
 
-```
-
-### Tabela R(t)
-
-
-```{r, echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
-
-tabela_rt <- df2 |> 
-  dplyr::select(date, rt) |> 
-  dplyr::filter(date >= Sys.Date() - 15)
-
-
-paged_table(tabela_rt)
 ```
 
 
