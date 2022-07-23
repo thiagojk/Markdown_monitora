@@ -14,6 +14,8 @@ p_load(tidyverse, rio, janitor, RColorBrewer, knitr,
        R0, shiny)
 ```
 
+
+
 ```{r}
 banco_1 <- read.csv2("casos_positivos-20220720092322033479.csv", 
                      encoding = "UTF-8", sep = ",")
