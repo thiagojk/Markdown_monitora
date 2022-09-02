@@ -4,7 +4,7 @@ output:
   flexdashboard::flex_dashboard:
     navbar:
       - { icon: "fa-twitter", href: "https://twitter.com/CoronavirusBra1?s=20&t=aF-tOgKsLox9VkpEEGeNiA", 
-      align: right }
+      align: right}
       - { icon: "fa-facebook",  
       href: "https://sesma.belem.pa.gov.br", align: right}
       - { icon: "fa-instagram", 
@@ -20,7 +20,10 @@ output:
 
 pacman::p_load(tidyverse, rio, janitor, RColorBrewer, knitr, 
        rmarkdown, ggrepel, plotly, forecast, ggridges, 
-       reshape2, R0, shiny, flexdashboard, shinydashboard)
+       reshape2, R0, shiny, flexdashboard, shinydashboard, av, magick,
+       ggridges, hrbrthemes, gapminder, gganimate, png, gifski, xts, dygraphs)
+
+knitr::opts_chunk$set(echo = FALSE)
 ```
 
 ```{r}
@@ -149,7 +152,7 @@ fore.dates_a <- seq.Date(from = max(dados_1_xts_a$datanot+1),
 Casos {data-icon="fa-globe"}
 =========================================
 
-## row value boxes 
+## row value boxes {data-height=140}
 
 ### Casos totais de COVID-19 {.value-box}
 ```{r}
@@ -207,66 +210,107 @@ flexdashboard::valueBox(round(max(fore.xts_a$mean)-min(fore.xts_a$mean),
                           caption = "Previsão de casos para os próximos 30 dias")
 ```
 
-## row plot 1 
-###
+## Pagina1 {data-height=300}
 
-```{r, echo=FALSE,message=FALSE, fig.align='center', fig.height=1}
-ggplotly(
-monitoramento |> 
-  filter(datanot >= "2021-01-01") |> 
+###
+```{r, fig.dim=c(1,1)}
+
+casos_totais <- monitoramento |>  
+  group_by(datanot) |> 
+  summarise(count = n()) 
+
+obitos_totais <- monitoramento |> 
+  filter(obito == "Sim") |> 
+  group_by(dataobt) |> 
+  summarise(obitos = n()) |> 
+  rename(datanot = dataobt)
+
+casos_obitos <- full_join(casos_totais, obitos_totais, by = "datanot") |> 
+  rename(casos = count) |> 
+  drop_na(datanot)
+
+casos1 <- xts(casos_obitos$casos, order.by = casos_obitos$datanot)
+obitos1 <- xts(casos_obitos$obitos, order.by = casos_obitos$datanot)
+
+plot1 <- cbind(casos1, obitos1)
+
+
+dygraph(plot1) |> 
+  dyBarSeries('obitos1', color = "red") |> 
+  dyEvent(x = "2020-12-31", "2020", labelLoc = 'top') |> 
+  dyEvent(x = "2021-12-31", "2021", labelLoc = 'top') |> 
+  dySeries(name = "casos1", label = "Casos") |> 
+  dySeries(name = "obitos1", label = "Óbitos")
+
+```
+
+
+
+
+## row plot 1 {data-height=300}
+
+
+### 
+```{r, echo=FALSE,message=FALSE, fig.align='center', fig.dim=c(1,2)}
+
+don_casos <- monitoramento |> 
   mutate(dia_mes = format(datanot, "%d/%m"),
          ano = format(datanot, "%Y")) |> 
   group_by(dia_mes, ano) |> 
   summarise(count = n()) |> 
   spread(key = ano, value = count) |> 
   mutate(datanot = as.Date(dia_mes, format = "%d/%m")) |> 
-  filter(datanot >= max(`2022`)-60) |> 
-  ggplot() +
-  geom_line(aes(x = datanot, y = `2021`, group = 1, color = "2021"), 
-            lwd = .7, alpha = .7) +
-  geom_line(aes(x = datanot, y = `2022`, group = 1, color = "2022"), 
-            lwd = .7, alpha = .7) +
-  scale_x_date(date_breaks = "month", date_labels = "%b") +
-  scale_color_manual(values = c("red", "blue")) +
-  labs(x = "Data", y = "Casos", color = "Ano",
-       title = "Casos de COVID-19 em Belém-PA") +
-  theme_bw()) 
+  filter(datanot >= max(`2022`)-60)
+
+
+casos_2020 <- xts(don_casos$`2020`, order.by = don_casos$datanot)
+casos_2021 <- xts(don_casos$`2021`, order.by = don_casos$datanot)
+casos_2022 <- xts(don_casos$`2022`, order.by = don_casos$datanot)
+
+casos <- cbind(casos_2020, casos_2021, casos_2022)
+
+dygraph(casos) |> 
+  dySeries("casos_2020", label = "Casos 2020") |> 
+  dySeries("casos_2021", label = "Casos 2021") |> 
+  dySeries("casos_2022", label = "Casos 2022") |> 
+  dyOptions(colors = brewer.pal(3, "Set1")) |> 
+  dyHighlight(highlightSeriesOpts = list(strokewidth = 3)) |> 
+  dyLegend(width = 500) 
+
 ```
 
 ###
-```{r, echo=FALSE,message=FALSE, fig.align='center'}
-ggplotly(
-monitoramento |> 
-  filter(datanot >= "2021-01-01") |> 
-  mutate(dia_mes = format(datanot, "%d/%m"),
+```{r, echo=FALSE,message=FALSE, fig.align='center',fig.dim=c(1,2)}
+don_casos_log <- monitoramento |> 
+  mutate(dia_mes = format(datanot, "%d-%m"),
          ano = format(datanot, "%Y")) |> 
   group_by(dia_mes, ano) |> 
   summarise(count = n()) |> 
-  spread(key = ano, value = count) |> 
-  mutate(datanot = as.Date(dia_mes, format = "%d/%m")) |> 
-  filter(datanot >= max(`2022`)-60) |> 
-  ggplot() +
-  geom_line(aes(x = datanot, y = `2021`, group = 1, color = "2021"), 
-            lwd = .7, alpha = .7) +
-  geom_line(aes(x = datanot, y = `2022`, group = 1, color = "2022"), 
-            lwd = .7, alpha = .7) +
-  scale_x_date(date_labels = "%b", date_breaks = "month") +
-  scale_y_log10() +
-  scale_color_manual(values = c("red", "blue")) +
-  labs(x = "Data", y = "Casos(Log)", color = "Ano",
-       title = "Casos de COVID-19 em escala logarítmica") +
-  theme_bw())
+  spread(key = ano, value = count)
 
+casos_2020 <- xts(log10(don_casos$`2020`), order.by = don_casos$datanot)
+casos_2021 <- xts(log10(don_casos$`2021`), order.by = don_casos$datanot)
+casos_2022 <- xts(log10(don_casos$`2022`), order.by = don_casos$datanot)
+
+casos <- cbind(casos_2020, casos_2021, casos_2022)
+
+dygraph(casos, ylab = "Número de casos", ) |> 
+  dySeries("casos_2020", label = "Casos 2020") |> 
+  dySeries("casos_2021", label = "Casos 2021") |> 
+  dySeries("casos_2022", label = "Casos 2022") |> 
+  dyOptions(colors = brewer.pal(3, "Set1")) |> 
+  dyHighlight(highlightSeriesOpts = list(strokewidth = 3)) |> 
+  dyLegend(width = 500) 
 ```
 
 ## Row
 ###
 
-```{r, echo = FALSE, message = FALSE, fig.width = 12, fig.height= 5}
-monitoramento |> 
-  filter(datanot >= "2022-01-01") |> 
-  group_by(Mes) |> 
-  summarise(count = n()) |> 
+```{r}
+monitoramento |>
+  filter(datanot >= "2022-01-01") |>
+  group_by(Mes) |>
+  summarise(count = n()) |>
   ggplot(aes(x = Mes, y = count, fill = Mes)) +
   geom_col(color = "Black") +
   scale_fill_brewer(palette = "Set3") +
@@ -388,23 +432,31 @@ monitoramento |>
 
 ## Média Idade
 ###
-```{r, echo=FALSE, warning=FALSE,fig.width = 12, fig.height= 5, message=FALSE}
-monitoramento |> 
-  filter(datanot >= "2022-01-01") |> 
-  group_by(datanot, Mes, obito) |> 
-  ggplot(aes(x = Mes, y = idade, fill = obito)) +
-  geom_boxplot(alpha = .7) +
-  labs(x = "Mês", y = "Idade dos pacientes",
-       title = "Idade dos pacientes de acordo com óbito por mês",
-       fill = "Óbito") +
-  scale_fill_manual(values = c("red", "green"),
-                    breaks = c("Sim", "Não")) +
-  scale_y_continuous(breaks = seq(0,100,10)) +
-  theme_bw() +
-  theme(axis.text.x = element_text(face = "bold"),
-        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-panel.background = element_blank(), axis.line = element_line(colour = "black"))
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+
+
+p <- monitoramento |>
+  filter(datanot >= "2022-01-01") |>
+  group_by(datanot, obito, idade) |>
+  summarise(count = n()) |>
+  group_by(datanot, obito) |>
+  summarise(media = mean(idade)) |>
+  ggplot(aes(x = datanot, y = media,
+             group = obito, color = obito)) +
+  geom_line(size = 1) +
+  scale_color_manual(values = c("#ff704d", "#4d4dff"),
+                       breaks = c("Sim", "Não")) +
+  geom_point(color = "black") +
+  scale_x_date(date_breaks = "month", date_labels = "%B") +
+  scale_y_continuous(breaks = seq(0,100, by = 10)) +
+  labs(x = "Data", y = "Média de idade") +
+  theme_ipsum() +
+  transition_reveal(datanot)
+
+
+animate(p, width = 900, height = 400, renderer = magick_renderer())
 ```
+
 
 ##
 ###
