@@ -350,15 +350,6 @@ monitoramento |>
 ```
 
 
-## RowSintoma {data-height=450}
-
-###
-
-```{r}
-
-```
-
-
 Óbitos {data-icon="fa-table"}
 ========================================
 
