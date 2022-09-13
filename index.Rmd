@@ -16,6 +16,7 @@ output:
     css: style.css
 ---
  
+ 
 ```{r setup, include=FALSE, context = "server"}
 
 pacman::p_load(tidyverse, rio, janitor, RColorBrewer, knitr, 
@@ -27,7 +28,7 @@ knitr::opts_chunk$set(echo = FALSE)
 ```
 
 ```{r}
-banco_1 <- read.csv2("casos_positivos-20220825112418265479.csv", 
+banco_1 <- read.csv2("casos_positivos-20220912093432762479.csv", 
                      encoding = "UTF-8", sep = ",")
 
 banco_1 <- banco_1 |> 
@@ -234,8 +235,8 @@ obitos1 <- xts(casos_obitos$obitos, order.by = casos_obitos$datanot)
 
 plot1 <- cbind(casos1, obitos1)
 
-
-dygraph(plot1) |> 
+dygraph(plot1, main = "Casos de COVID-19 em Belém-PA",
+        ylab = "Número de casos") |> 
   dyBarSeries('obitos1', color = "red") |> 
   dyEvent(x = "2020-12-31", "2020", labelLoc = 'top') |> 
   dyEvent(x = "2021-12-31", "2021", labelLoc = 'top') |> 
@@ -269,14 +270,17 @@ casos_2022 <- xts(don_casos$`2022`, order.by = don_casos$datanot)
 
 casos <- cbind(casos_2020, casos_2021, casos_2022)
 
-dygraph(casos) |> 
+
+
+dygraph(casos, main = "Casos de COVID-19 em Belém-PA",
+        ylab = "Número de casos") |> 
   dySeries("casos_2020", label = "Casos 2020") |> 
   dySeries("casos_2021", label = "Casos 2021") |> 
   dySeries("casos_2022", label = "Casos 2022") |> 
   dyOptions(colors = brewer.pal(3, "Set1")) |> 
   dyHighlight(highlightSeriesOpts = list(strokewidth = 3)) |> 
-  dyLegend(width = 500) 
-
+  dyLegend(width = 500) |> 
+  dygraphs::dyLegend(show = "always", hideOnMouseOut = FALSE)
 ```
 
 ###
@@ -294,7 +298,7 @@ casos_2022 <- xts(log10(don_casos$`2022`), order.by = don_casos$datanot)
 
 casos <- cbind(casos_2020, casos_2021, casos_2022)
 
-dygraph(casos, ylab = "Número de casos", ) |> 
+dygraph(casos, ylab = "Casos (Log)", main = "Casos em escala logaritmica") |> 
   dySeries("casos_2020", label = "Casos 2020") |> 
   dySeries("casos_2021", label = "Casos 2021") |> 
   dySeries("casos_2022", label = "Casos 2022") |> 
@@ -303,32 +307,65 @@ dygraph(casos, ylab = "Número de casos", ) |>
   dyLegend(width = 500) 
 ```
 
-## Row
+## Row {data-height=400}
+
+###
+```{r, echo = FALSE, message=FALSE}
+monitoramento |> 
+  mutate(bairro = ifelse(bairro %in% "", NA, bairro)) |> 
+  group_by(bairro) |> 
+  summarise(count = n()) |> 
+  drop_na(bairro) |> 
+  top_n(10) |> 
+  ggplot(aes(x = count, y = reorder(bairro, count), fill = bairro)) +
+  geom_col(color = "blue", alpha = .8) +
+  labs(x = "Número de casos", y = "Bairro",
+       title = "Casos de COVID-19 por bairro") +
+  scale_x_continuous(limits = c(0,10000)) +
+  scale_fill_brewer(palette = "Set3") +
+  geom_text(aes(label = count), hjust = -.5) +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+###
+```{r, echo=FALSE, message=FALSE}
+
+monitoramento |> 
+  group_by(Faixa_Etaria, sexo) |> 
+  summarise(count = n()) |> 
+  drop_na(Faixa_Etaria) |> 
+  mutate(sexo = factor(sexo, levels = c("Masculino", "Feminino"))) |> 
+  ggplot() +
+  aes(x = Faixa_Etaria, y = count, fill = sexo) +
+  geom_bar(stat = "identity", position = "dodge", color = "blue", alpha = .8) +
+  geom_text(aes(label = count, group = sexo), position = position_dodge(width = 1), hjust = -.1) +
+  scale_fill_brewer(palette = "Set2") +
+  scale_y_continuous(limits = c(0,20000)) +
+  labs(x = "Faixa etária", y = "Número de casos", 
+       title = "Casos confirmados por faixa etária e sexo") +
+  coord_flip() +
+  theme_bw()
+
+```
+
+
+## RowSintoma {data-height=450}
+
 ###
 
 ```{r}
-monitoramento |>
-  filter(datanot >= "2022-01-01") |>
-  group_by(Mes) |>
-  summarise(count = n()) |>
-  ggplot(aes(x = Mes, y = count, fill = Mes)) +
-  geom_col(color = "Black") +
-  scale_fill_brewer(palette = "Set3") +
-  geom_point() +
-  labs(x = "Mês", y = "Número de casos",
-       title = "Casos de COVID-19 por mês") +
-  geom_text(aes(label = count), vjust = -.5) +
-  theme_bw() +
-  theme(legend.position = "none",
-        axis.text.x = element_text(face = "bold"))
+
 ```
+
 
 Óbitos {data-icon="fa-table"}
 ========================================
 
-## row value boxes 
 
-### Casos COVID-19 {.value-box}
+## row value boxes {data-height=140}
+
+### Casos totais de COVID-19 {.value-box}
 ```{r}
 flexdashboard::valueBox(
   monitoramento |> 
@@ -337,7 +374,7 @@ flexdashboard::valueBox(
     summarise(soma = sum(count))) 
 ```
 
-### Casos {.value-box}
+### Casos em 2022 {.value-box}
 ```{r}
 flexdashboard::valueBox(
   monitoramento |> 
@@ -347,7 +384,16 @@ flexdashboard::valueBox(
     summarise(soma = sum(count)))
 ```
 
-### Óbitos  {.value-box} 
+### Óbitos totais de COVID-19 {.value-box} 
+```{r}
+flexdashboard::valueBox(
+  monitoramento |>
+    group_by(dataobt) |>
+    summarise(count = n()) |>
+    summarise(soma = sum(count)))
+```
+
+### Óbitos em 2022  {.value-box} 
 ```{r}
 flexdashboard::valueBox(
   monitoramento |>
@@ -365,142 +411,146 @@ df2 |>
     dplyr::filter(date == max(date)) |> 
     summarise(rt = rt) |> 
     as.numeric() |>
-    round(digits = 2))
+    round(digits = 2)) 
 ``` 
 
 ### {.value-box} 
 ```{r}
-
 flexdashboard::valueBox(round(max(fore.xts_a$mean)-min(fore.xts_a$mean), 
                               digits = 2),
                           caption = "Previsão de casos para os próximos 30 dias")
-  
 ```
 
-## Óbitos
+## Pagina1 {data-height=300}
+
+###
+```{r, fig.dim=c(1,1)}
+
+obitos_totais <- monitoramento |> 
+  filter(obito == "Sim") |> 
+  group_by(dataobt) |> 
+  summarise(obitos = n()) |> 
+  rename(dataobt = dataobt) |> 
+  drop_na(dataobt)
+
+
+obitos1 <- xts(obitos_totais$obitos, order.by = obitos_totais$dataobt)
+
+
+dygraph(obitos1, main = "Óbitos de COVID-19 em Belém-PA",
+        ylab = "Número de obitos") |> 
+  dyEvent(x = "2020-12-31", "2020", labelLoc = 'top') |> 
+  dyEvent(x = "2021-12-31", "2021", labelLoc = 'top') |> 
+  dyOptions(colors = "red", fillGraph = TRUE, fillAlpha = .2)
+
+```
+
+
+
+
+## row plot 1 {data-height=300}
+
+ 
 ### 
+```{r, echo=FALSE,message=FALSE, fig.align='center', fig.dim=c(1,2)}
 
-```{r, echo=FALSE,message=FALSE, fig.align='center',fig.height=1}
-ggplotly(
-monitoramento |> 
-  filter(dataobt >= "2021-01-01",
-         obito == "Sim") |> 
+don_obitos <- monitoramento |> 
   mutate(dia_mes = format(dataobt, "%d/%m"),
          ano = format(dataobt, "%Y")) |> 
   group_by(dia_mes, ano) |> 
   summarise(count = n()) |> 
   spread(key = ano, value = count) |> 
   mutate(dataobt = as.Date(dia_mes, format = "%d/%m")) |> 
-  filter(dataobt >= max(`2022`)-60) |> 
-  ggplot() +
-  geom_line(aes(x = dataobt, y = `2021`, group = 1, color = "2021"), 
-            lwd = .7, alpha = .7) +
-  geom_line(aes(x = dataobt, y = `2022`, group = 1, color = "2022"), 
-            lwd = .7, alpha = .7) +
-  scale_x_date(date_breaks = "month", date_labels = "%b") +
-  scale_color_manual(values = c("red", "blue")) +
-  labs(x = "Data", y = "Óbitos", color = "Ano",
-       title = "Número de óbitos por COVID-19 em Belém-PA") +
-  theme_bw()) 
+  filter(dataobt >= max(`2022`)-60)
+
+
+obitos_2020 <- xts(don_obitos$`2020`, order.by = don_obitos$dataobt)
+obitos_2021 <- xts(don_obitos$`2021`, order.by = don_obitos$dataobt)
+obitos_2022 <- xts(don_obitos$`2022`, order.by = don_obitos$dataobt)
+
+obitos <- cbind(obitos_2020, obitos_2021, obitos_2022)
+
+
+
+dygraph(obitos, main = "obitos de COVID-19 em Belém-PA",
+        ylab = "Número de obitos") |> 
+  dySeries("obitos_2020", label = "obitos 2020") |> 
+  dySeries("obitos_2021", label = "obitos 2021") |> 
+  dySeries("obitos_2022", label = "obitos 2022") |> 
+  dyOptions(colors = brewer.pal(3, "Set1")) |> 
+  dyHighlight(highlightSeriesOpts = list(strokewidth = 3)) |> 
+  dyLegend(width = 500) |> 
+  dygraphs::dyLegend(show = "always", hideOnMouseOut = FALSE)
 ```
 
 ###
-```{r, echo=FALSE,message=FALSE, fig.align='center'}
-ggplotly(
-monitoramento |> 
-  filter(dataobt >= "2021-01-01",
-         obito == "Sim") |> 
-  mutate(dia_mes = format(dataobt, "%d/%m"),
+```{r, echo=FALSE,message=FALSE, fig.align='center',fig.dim=c(1,2)}
+don_obitos_log <- monitoramento |> 
+  mutate(dia_mes = format(dataobt, "%d-%m"),
          ano = format(dataobt, "%Y")) |> 
   group_by(dia_mes, ano) |> 
   summarise(count = n()) |> 
-  spread(key = ano, value = count) |> 
-  mutate(dataobt = as.Date(dia_mes, format = "%d/%m")) |> 
-  filter(dataobt >= max(`2022`)-60) |> 
-  ggplot() +
-  geom_line(aes(x = dataobt, y = `2021`, group = 1, color = "2021"), 
-            lwd = .7, alpha = .7) +
-  geom_line(aes(x = dataobt, y = `2022`, group = 1, color = "2022"), 
-            lwd = .7, alpha = .7) +
-  scale_x_date(date_labels = "%b", date_breaks = "month") +
-  scale_y_log10() +
-  scale_color_manual(values = c("red", "blue")) +
-  labs(x = "Data", y = "Óbitos (Log)", color = "Ano",
-       title = "Número de óbitos por COVID-19 (Escala Logarítma)") +
-  theme_bw())
+  spread(key = ano, value = count)
+
+obitos_2020 <- xts(log10(don_obitos$`2020`), order.by = don_obitos$dataobt)
+obitos_2021 <- xts(log10(don_obitos$`2021`), order.by = don_obitos$dataobt)
+obitos_2022 <- xts(log10(don_obitos$`2022`), order.by = don_obitos$dataobt)
+
+obitos <- cbind(obitos_2020, obitos_2021, obitos_2022)
+
+dygraph(obitos, ylab = "obitos (Log)", main = "obitos em escala logaritmica") |> 
+  dySeries("obitos_2020", label = "obitos 2020") |> 
+  dySeries("obitos_2021", label = "obitos 2021") |> 
+  dySeries("obitos_2022", label = "obitos 2022") |> 
+  dyOptions(colors = brewer.pal(3, "Set1")) |> 
+  dyHighlight(highlightSeriesOpts = list(strokewidth = 3)) |> 
+  dyLegend(width = 500) 
 ```
 
-## Média Idade
+## Row {data-height=400}
+
 ###
-```{r, echo=FALSE, warning=FALSE, message=FALSE}
-
-
-p <- monitoramento |>
-  filter(datanot >= "2022-01-01") |>
-  group_by(datanot, obito, idade) |>
-  summarise(count = n()) |>
-  group_by(datanot, obito) |>
-  summarise(media = mean(idade)) |>
-  ggplot(aes(x = datanot, y = media,
-             group = obito, color = obito)) +
-  geom_line(size = 1) +
-  scale_color_manual(values = c("#ff704d", "#4d4dff"),
-                       breaks = c("Sim", "Não")) +
-  geom_point(color = "black") +
-  scale_x_date(date_breaks = "month", date_labels = "%B") +
-  scale_y_continuous(breaks = seq(0,100, by = 10)) +
-  labs(x = "Data", y = "Média de idade") +
-  theme_ipsum() +
-  transition_reveal(datanot)
-
-
-animate(p, width = 900, height = 400, renderer = magick_renderer())
-```
-
-
-##
-###
-
-```{r, echo = FALSE, message = FALSE, fig.width = 10, fig.height= 6}
+```{r, echo = FALSE, message=FALSE}
 monitoramento |> 
-  filter(dataobt >= "2022-01-01",
-         obito == "Sim") |> 
-  mutate(mes_obito = as.factor(lubridate::month(dataobt))) |> 
-  group_by(mes_obito) |>
-  summarise(count = n()) |> 
-  ggplot(aes(x = mes_obito, y = count, fill = mes_obito)) +
-  geom_col(color = "Black") +
-  scale_fill_brewer(palette = "Set2") +
-  scale_x_discrete(labels = c("1" = "Janeiro", "2" = "Fevereiro",
-                              "3" = "Março", "4" = "Abril", "5" = "Maio",
-                              "6" = "Junho", "7" = "Julho", "8" = "Agosto")) +
-  geom_point() +
-  labs(x = "Mês", y = "Número de casos", 
-       title = "Óbitos de COVID-19 por mês") +
-  geom_text(aes(label = count), vjust = -.5) +
-  theme_bw() +
-  theme(legend.position = "none",
-        axis.text.x = element_text(face = "bold"))
-```
-
-###
-```{r, echo = FALSE, message=FALSE, fig.align='center'}
-monitoramento |> 
+  filter(obito == "Sim") |> 
   mutate(bairro = ifelse(bairro %in% "", NA, bairro)) |> 
   group_by(bairro) |> 
   summarise(count = n()) |> 
   drop_na(bairro) |> 
   top_n(10) |> 
   ggplot(aes(x = count, y = reorder(bairro, count), fill = bairro)) +
-  geom_col(color = "black") +
-  labs(x = "Número de casos", y = "Bairro",
-       title = "Casos de COVID-19 por bairro") +
-  scale_x_continuous(limits = c(0,10000)) +
+  geom_col(color = "blue", alpha = .8) +
+  labs(x = "Número de obitos", y = "Bairro",
+       title = "obitos de COVID-19 por bairro") +
+  scale_x_continuous(limits = c(0,400)) +
   scale_fill_brewer(palette = "Set3") +
   geom_text(aes(label = count), hjust = -.5) +
   theme_bw() +
   theme(legend.position = "none")
 ```
+
+###
+```{r, echo=FALSE, message=FALSE}
+
+monitoramento |> 
+  filter(obito == "Sim") |> 
+  group_by(Faixa_Etaria, sexo) |> 
+  summarise(count = n()) |> 
+  drop_na(Faixa_Etaria) |> 
+  mutate(sexo = factor(sexo, levels = c("Masculino", "Feminino"))) |> 
+  ggplot() +
+  aes(x = Faixa_Etaria, y = count, fill = sexo) +
+  geom_bar(stat = "identity", position = "dodge", color = "blue", alpha = .8) +
+  geom_text(aes(label = count, group = sexo), position = position_dodge(width = 1), hjust = -.1) +
+  scale_fill_brewer(palette = "Set1") +
+  scale_y_continuous(limits = c(0,1000)) +
+  labs(x = "Faixa etária", y = "Número de óbitos", 
+       title = "Óbitos confirmados por faixa etária e sexo") +
+  coord_flip() +
+  theme_bw()
+
+```
+
 
 Previsão {data-icon="fa-area-chart"}
 =========================================
@@ -645,7 +695,7 @@ Corresponde ao número médio de pessoas infectadas por pessoa infecciosa. Se o 
 
 Por exemplo, uma taxa de propagação de 1,54 indica que a cada 100 pessoas infectadas com o vírus conseguem transmitir a doença para outras 154 pessoas saudáveis.
 
-Uma recomendação é de que medidas de isolamento e distanciamento sejam flexibilizadas apenas se a taxa de propag   ação R(t) estiver abaixo de 1 por pelo menos uma semana.
+Uma recomendação é de que medidas de isolamento e distanciamento sejam flexibilizadas apenas se a taxa de propagação R(t) estiver abaixo de 1 por pelo menos uma semana.
 
 Vale destacar que somente a análise do R(t) não caracteriza um determinado território em relação à gravidade, deve-se levar em consideação o R(t) e o número absoluto de casos. 
 
