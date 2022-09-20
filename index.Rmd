@@ -368,10 +368,10 @@ dygraph(casos, ylab = "Casos (Log)", main = "Casos em escala logaritmica") |>
   dyLegend(width = 500) 
 ```
 
-## Pagina1 {data-height=300}
+## Pagina1 {data-height=400}
 
 ###
-```{r, fig.dim=c(14,4)}
+```{r, fig.dim=c(16,4)}
 monitoramento |> 
   group_by(year, Mes) |> 
   summarise(count = n()) |> 
@@ -433,6 +433,30 @@ monitoramento |>
 
 ```
 
+###
+
+
+```{r}
+monitoramento |> 
+  group_by(raca) |> 
+  summarise(count = n()) |> 
+  mutate(raca = ifelse(raca == "",NA,raca)) |> 
+  drop_na(raca) |> 
+  ggplot(aes(x = reorder(raca, -count), y = count, fill = raca)) +
+  geom_bar(stat = "identity", show.legend = F, color = "black",
+           alpha = .8) +
+  scale_fill_brewer(palette = "Set2") +
+  scale_y_continuous(limits = c(0,80000)) +
+  labs(y = "Número de casos", title = "Casos de COVID-19 por raça") +
+  geom_text(aes(label = count), position = position_dodge(width = 1),
+            vjust =-.5) +
+  theme_bw() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(face = "bold"))
+
+```
+
+
 ## Row {data-height=400}
 
 ###
@@ -486,26 +510,6 @@ comorbidades |>
 
 
 ###
-
-```{r}
-monitoramento |> 
-  group_by(raca) |> 
-  summarise(count = n()) |> 
-  mutate(raca = ifelse(raca == "",NA,raca)) |> 
-  drop_na(raca) |> 
-  ggplot(aes(x = reorder(raca, -count), y = count, fill = raca)) +
-  geom_bar(stat = "identity", show.legend = F, color = "black",
-           alpha = .8) +
-  scale_fill_brewer(palette = "Set2") +
-  scale_y_continuous(limits = c(0,80000)) +
-  labs(y = "Número de casos", title = "Casos de COVID-19 por raça") +
-  geom_text(aes(label = count), position = position_dodge(width = 1),
-            vjust =-.5) +
-  theme_bw() +
-  theme(axis.title.x = element_blank(),
-        axis.text.x = element_text(face = "bold"))
-
-```
 
 
 
