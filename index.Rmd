@@ -28,6 +28,9 @@ knitr::opts_chunk$set(echo = FALSE)
 ```
 
 ```{r}
+
+pop = 1506420
+
 banco_1 <- read.csv2("casos_positivos-20220912093432762479.csv", 
                      encoding = "UTF-8", sep = ",")
 
@@ -40,7 +43,7 @@ monitoramento <- banco_1 |>
   dplyr::mutate(datanot = as.Date(data_notificacao, format = "%d/%m/%Y"),
          dataobt = as.Date(data_obito, format = "%d/%m/%Y"),
          data_IS = as.Date(data_inicio_sintomas, format = "%d/%m/%Y"),
-         CPF = as.character(cpf),  # Deixa o CPF como character mesmo, confia 
+         CPF = as.character(cpf),  # Deixa o CPF como character mesmo, confia
          nome = str_to_upper(nome),
          id = as.character(id),
          Faixa_Etaria = case_when(idade <= 10~"0 a 10 anos",
@@ -87,6 +90,51 @@ df1 <- monitoramento |>
             summarise(count = n()) |>  
             rename(date = datanot,
                    confirmed = count)
+# ------ comorbidades
+sintomas <- monitoramento |>  
+  subset(select = c(21:39)) |> 
+  pivot_longer(cols = c(1:19), 
+               names_to = "Sintomas", 
+               values_to = "Sim_Nao") |>
+  mutate(Sintomas = case_when(Sintomas == "tosse"~"Tosse",
+                              Sintomas == "febre"~"Febre",
+                              Sintomas == "dor_de_garganta"~"Dor de garganta",
+                              Sintomas == "cefaleia"~"Cefaleia",
+                              Sintomas == "coriza"~"Coriza",
+                              Sintomas == "dispineia"~"Dispineia",
+                              Sintomas == "perda_de_paladar"~"Perda de paladar",
+                              Sintomas == "perda_de_olfato"~"Perda de olfato",
+                              Sintomas == "mialgia"~"Mialgia",
+                              Sintomas == "diarreia"~"Diarreia",
+                              Sintomas == "adinamia"~"Adinamia",
+                              Sintomas == "nausea_vomito"~"Náusea ou Vômito",
+                              Sintomas == "assintomatico"~"Assintomático",
+                              Sintomas == "congestao_nasal"~"Congestão nasal",
+                              Sintomas == "calafrio"~"Calafrio",
+                              Sintomas == "odinofagia"~"odinofagia",
+                              Sintomas == "ausculta_pulmonar_alterada"~"Ausculta pulmonar alterada",
+                              Sintomas == "saturacao_95_o2"~"Saturação o2 < 95%",
+                              Sintomas == "conjuntivite"~"Conjuntivite"))
+
+# ----- Comorbidades
+
+comorbidades <- monitoramento |> 
+  subset(select = c(40:51)) |> 
+  pivot_longer(cols = c(1:12), 
+               names_to = "comorbidades", 
+               values_to = "Sim_Nao") |>
+  mutate(comorbidades = case_when(comorbidades == "puerpera"~"Puerpera",
+                              comorbidades == "gestante"~"Gestante",
+                              comorbidades == "cardiopatia"~"Cardiopatia",
+                              comorbidades == "doenca_hematologica"~"Doença Hematológica",
+                              comorbidades == "doenca_hepatica"~"Doença Hepática",
+                              comorbidades == "asma"~"Asma",
+                              comorbidades == "Diabetes"~"Diabetes",
+                              comorbidades == "doenca_neurologica"~"Doença Neurológica",
+                              comorbidades == "pneumopatia"~"Pneumopatia",
+                              comorbidades == "imunodeficiencia_imunisupressao"~"Imunodeficiência",
+                              comorbidades == "doenca_renal"~"Doença Renal",
+                              comorbidades == "obesidade"~"Obesidade"))
 
 # ------------Preencher datas
 datas <- data.frame(date = seq.POSIXt(as.POSIXct("2022-01-01"), as.POSIXct(max(df1$date)), 
@@ -178,6 +226,7 @@ flexdashboard::valueBox(
 ```{r}
 flexdashboard::valueBox(
   monitoramento |>
+    filter(obito == "Sim") |> 
     group_by(dataobt) |>
     summarise(count = n()) |>
     summarise(soma = sum(count)))
@@ -192,6 +241,18 @@ flexdashboard::valueBox(
     group_by(dataobt) |>
     summarise(count = n()) |>
     summarise(soma = sum(count)))
+```
+
+### Taxa de mortalidade em 2022  {.value-box} 
+```{r}
+flexdashboard::valueBox(
+  monitoramento |>
+    filter(obito == "Sim",
+           dataobt>= "2022-01-01") |>
+    group_by(dataobt) |>
+    summarise(count = n()) |>
+    summarise(soma = round(sum(count)*1000/pop, digits = 2)))
+
 ```
 
 ### Taxa de propagação R(t) atual {.value-box} 
@@ -241,7 +302,7 @@ dygraph(plot1, main = "Casos de COVID-19 em Belém-PA",
   dyEvent(x = "2020-12-31", "2020", labelLoc = 'top') |> 
   dyEvent(x = "2021-12-31", "2021", labelLoc = 'top') |> 
   dySeries(name = "casos1", label = "Casos") |> 
-  dySeries(name = "obitos1", label = "Óbitos")
+  dySeries(name = "obitos1", label = "Óbitos") 
 
 ```
 
@@ -307,10 +368,29 @@ dygraph(casos, ylab = "Casos (Log)", main = "Casos em escala logaritmica") |>
   dyLegend(width = 500) 
 ```
 
-## Row {data-height=400}
+## Pagina1 {data-height=300}
 
 ###
-```{r, echo = FALSE, message=FALSE}
+```{r, fig.dim=c(14,4)}
+monitoramento |> 
+  group_by(year, Mes) |> 
+  summarise(count = n()) |> 
+  ggplot(aes(x = Mes, y = count, fill = year)) +
+  geom_bar(stat = "identity", position = "dodge", 
+           color = "black", alpha = .7) +
+  labs(x = "Mês", y = "Número de casos", fill = "Ano") +
+  scale_fill_brewer(palette = "Set1") +
+  geom_text(aes(x = Mes, y = count, label = count, group = Mes,
+                vjust = -0.5),
+            position = position_dodge2(width = 1)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(face = "bold"))
+```
+
+## Row {data-height=300}
+
+###
+```{r, fig.dim=c(6,4)}
 monitoramento |> 
   mutate(bairro = ifelse(bairro %in% "", NA, bairro)) |> 
   group_by(bairro) |> 
@@ -318,18 +398,20 @@ monitoramento |>
   drop_na(bairro) |> 
   top_n(10) |> 
   ggplot(aes(x = count, y = reorder(bairro, count), fill = bairro)) +
-  geom_col(color = "blue", alpha = .8) +
+  geom_col(color = "black", alpha = .8) +
   labs(x = "Número de casos", y = "Bairro",
        title = "Casos de COVID-19 por bairro") +
   scale_x_continuous(limits = c(0,10000)) +
   scale_fill_brewer(palette = "Set3") +
   geom_text(aes(label = count), hjust = -.5) +
   theme_bw() +
-  theme(legend.position = "none")
+  theme(legend.position = "none",
+        axis.title.y = element_blank(),
+        axis.text.y = element_text(face = "bold"))
 ```
 
 ###
-```{r, echo=FALSE, message=FALSE}
+```{r, fig.dim=c(6,4)}
 
 monitoramento |> 
   group_by(Faixa_Etaria, sexo) |> 
@@ -338,16 +420,94 @@ monitoramento |>
   mutate(sexo = factor(sexo, levels = c("Masculino", "Feminino"))) |> 
   ggplot() +
   aes(x = Faixa_Etaria, y = count, fill = sexo) +
-  geom_bar(stat = "identity", position = "dodge", color = "blue", alpha = .8) +
+  geom_bar(stat = "identity", position = "dodge", color = "black", alpha = .8) +
   geom_text(aes(label = count, group = sexo), position = position_dodge(width = 1), hjust = -.1) +
   scale_fill_brewer(palette = "Set2") +
   scale_y_continuous(limits = c(0,20000)) +
   labs(x = "Faixa etária", y = "Número de casos", 
        title = "Casos confirmados por faixa etária e sexo") +
   coord_flip() +
-  theme_bw()
+  theme_bw() +
+  theme(axis.title.y = element_blank(),
+    axis.text.y = element_text(face = "bold"))
 
 ```
+
+## Row {data-height=400}
+
+###
+
+```{r}
+
+sintomas |> 
+  group_by(Sintomas, Sim_Nao) |> 
+  summarise(count = n()) |> 
+  mutate(prop = prop.table(count)) |> 
+  filter(Sim_Nao == "Sim") |> 
+  arrange(desc(prop)) |>
+  ggplot(aes(x = reorder(Sintomas, prop), y = prop, fill = "red")) +
+  geom_col(color = "black", show.legend = F) +
+  scale_y_continuous(limits = c(0,0.8),
+                     labels = scales::percent) +
+  geom_text(aes(label = paste0(round(prop*100, digits = 2),"%"), 
+                hjust = -.1)) +
+  labs(y = "Percentual", 
+       title = "Principais sintomas dos casos de COVID-19") +
+  coord_flip() +
+  theme_bw() +
+  theme(axis.title.y = element_blank(),
+        axis.text.y = element_text(face = "bold"))
+
+```
+
+###
+```{r}
+comorbidades |> 
+  group_by(comorbidades, Sim_Nao) |> 
+  summarise(count = n()) |> 
+  mutate(prop = prop.table(count)) |> 
+  filter(Sim_Nao == "Sim") |> 
+  arrange(desc(prop)) |>
+  drop_na(comorbidades) |> 
+  ggplot(aes(x = reorder(comorbidades, prop), 
+             y = prop, fill = "red")) +
+  geom_col(color = "black", show.legend = F) +
+  scale_y_continuous(limits = c(0,0.06),
+                     labels = scales::percent) +
+  geom_text(aes(label = paste0(round(prop*100, digits = 2),"%"), 
+                hjust = -.1)) +
+  labs(x = "Comorbidades", y = "Percentual", 
+       title = "Principais comorbidades dos casos de COVID-19") +
+  coord_flip() +
+  theme_bw() +
+  theme(axis.title.y = element_blank(),
+        axis.text.y = element_text(face = "bold"))
+```
+
+
+###
+
+```{r}
+monitoramento |> 
+  group_by(raca) |> 
+  summarise(count = n()) |> 
+  mutate(raca = ifelse(raca == "",NA,raca)) |> 
+  drop_na(raca) |> 
+  ggplot(aes(x = reorder(raca, -count), y = count, fill = raca)) +
+  geom_bar(stat = "identity", show.legend = F, color = "black",
+           alpha = .8) +
+  scale_fill_brewer(palette = "Set2") +
+  scale_y_continuous(limits = c(0,80000)) +
+  labs(y = "Número de casos", title = "Casos de COVID-19 por raça") +
+  geom_text(aes(label = count), position = position_dodge(width = 1),
+            vjust =-.5) +
+  theme_bw() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_text(face = "bold"))
+
+```
+
+
 
 
 Óbitos {data-icon="fa-table"}
@@ -379,6 +539,7 @@ flexdashboard::valueBox(
 ```{r}
 flexdashboard::valueBox(
   monitoramento |>
+    filter(obito == "Sim") |> 
     group_by(dataobt) |>
     summarise(count = n()) |>
     summarise(soma = sum(count)))
@@ -393,6 +554,19 @@ flexdashboard::valueBox(
     group_by(dataobt) |>
     summarise(count = n()) |>
     summarise(soma = sum(count)))
+```
+
+
+### Taxa de mortalidade em 2022  {.value-box} 
+```{r}
+flexdashboard::valueBox(
+  monitoramento |>
+    filter(obito == "Sim",
+           dataobt>= "2022-01-01") |>
+    group_by(dataobt) |>
+    summarise(count = n()) |>
+    summarise(soma = round(sum(count)*1000/pop, digits = 2)))
+
 ```
 
 ### Taxa de propagação R(t) atual {.value-box} 
@@ -545,19 +719,18 @@ monitoramento |>
 
 Previsão {data-icon="fa-area-chart"}
 =========================================
+## row value boxes {data-height=140}
 
-## row value boxes
-### Casos COVID-19 {.value-box}
+### Casos totais de COVID-19 {.value-box}
 ```{r}
-
 flexdashboard::valueBox(
   monitoramento |> 
     group_by(datanot) |> 
     summarise(count = n()) |>
-    summarise(soma = sum(count)))
+    summarise(soma = sum(count))) 
 ```
 
-### Casos {.value-box}
+### Casos em 2022 {.value-box}
 ```{r}
 flexdashboard::valueBox(
   monitoramento |> 
@@ -567,7 +740,17 @@ flexdashboard::valueBox(
     summarise(soma = sum(count)))
 ```
 
-### Óbitos  {.value-box} 
+### Óbitos totais de COVID-19 {.value-box} 
+```{r}
+flexdashboard::valueBox(
+  monitoramento |>
+    filter(obito == "Sim") |> 
+    group_by(dataobt) |>
+    summarise(count = n()) |>
+    summarise(soma = sum(count)))
+```
+
+### Óbitos em 2022  {.value-box} 
 ```{r}
 flexdashboard::valueBox(
   monitoramento |>
@@ -578,20 +761,32 @@ flexdashboard::valueBox(
     summarise(soma = sum(count)))
 ```
 
-### {.value-box} 
+
+### Taxa de mortalidade em 2022  {.value-box} 
+```{r}
+flexdashboard::valueBox(
+  monitoramento |>
+    filter(obito == "Sim",
+           dataobt>= "2022-01-01") |>
+    group_by(dataobt) |>
+    summarise(count = n()) |>
+    summarise(soma = round(sum(count)*1000/pop, digits = 2)))
+
+```
+
+### Taxa de propagação R(t) atual {.value-box} 
 ```{r}
 flexdashboard::valueBox(
 df2 |> 
     dplyr::filter(date == max(date)) |> 
     summarise(rt = rt) |> 
     as.numeric() |>
-    round(digits = 2), 
-caption = "Taxa de propagação R(t) atual")
+    round(digits = 2)) 
 ``` 
 
 ### {.value-box} 
 ```{r}
-flexdashboard::valueBox(round(max(fore.xts_a$mean)-min(fore.xts_a$mean),
+flexdashboard::valueBox(round(max(fore.xts_a$mean)-min(fore.xts_a$mean), 
                               digits = 2),
                           caption = "Previsão de casos para os próximos 30 dias")
 ```
